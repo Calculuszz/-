@@ -1,37 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import { getImageEmbedding } from "@/lib/clipEmbedding";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { getImageEmbeddingFromBuffer } from "@/lib/geminiEmbedding";
-import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
+  const formData = await req.formData();
 
-  const file = form.get("image") as File;
-  const eventId = form.get("event_id") as string;
-  const title = (form.get("title") as string) ?? "unknown item";
+  const file = formData.get("image") as File;
+  const title = formData.get("title") as string;
+  const eventId = formData.get("event_id") as string;
 
   if (!file || !eventId) {
     return NextResponse.json({ error: "missing data" }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  /* 1) upload image */
-  const imagePath = `items/event_${eventId}/${randomUUID()}.jpg`;
-
-  await supabaseAdmin.storage
-    .from("items")
-    .upload(imagePath, buffer, { contentType: file.type });
+  /* 1) save image (local for testing) */
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const imagePath = path.join("uploads", `${Date.now()}-${file.name}`);
+  await fs.writeFile(imagePath, bytes);
 
   /* 2) insert item */
-  const { data: item } = await supabaseAdmin
+  const { data: item, error: itemError } = await supabaseAdmin
     .from("items")
-    .insert({ event_id: eventId, title })
+    .insert({
+      event_id: eventId,
+      title,
+    })
     .select()
     .single();
 
+  if (itemError) {
+    return NextResponse.json({ error: itemError }, { status: 500 });
+  }
+
   /* 3) insert item_images */
-  const { data: image } = await supabaseAdmin
+  const { data: image, error: imageError } = await supabaseAdmin
     .from("item_images")
     .insert({
       item_id: item.id,
@@ -40,13 +44,17 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  /* 4) embedding */
-  const embedding = await getImageEmbeddingFromBuffer(buffer);
+  if (imageError) {
+    return NextResponse.json({ error: imageError }, { status: 500 });
+  }
 
-  /* 5) insert vector */
+  /* 4) embedding */
+  const embedding = await getImageEmbedding(imagePath);
+
+  /* 5) insert item_embeddings */
   await supabaseAdmin.from("item_embeddings").insert({
     item_image_id: image.id,
-    model: "vertex-multimodal-embedding",
+    model: "clip-local",
     embedding,
   });
 
