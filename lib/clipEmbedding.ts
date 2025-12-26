@@ -1,19 +1,24 @@
-const Replicate = require("replicate");
+import { execFile } from "child_process";
+import path from "path";
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN,
-});
+export function getImageEmbedding(imagePath: string): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve("clip_embed.py");
 
-module.exports = {
-  getImageEmbedding: async (buffer: Buffer) => {
-    const base64 = buffer.toString("base64");
+    execFile(
+      "python",
+      [scriptPath, imagePath],
+      { maxBuffer: 1024 * 1024 * 10 },
+      (error, stdout) => {
+        if (error) return reject(error);
 
-    const output = await replicate.run("openai/clip-vit-large-patch14", {
-      input: {
-        image: `data:image/jpeg;base64,${base64}`,
-      },
-    });
-
-    return output;
-  },
-};
+        try {
+          const embedding = JSON.parse(stdout);
+          resolve(embedding);
+        } catch (e) {
+          reject(e);
+        }
+      }
+    );
+  });
+}

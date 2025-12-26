@@ -1,10 +1,7 @@
-require("dotenv").config();
-const fs = require("fs");
-const { getImageEmbedding } = require("./lib/clipEmbedding");
+import { getImageEmbedding } from "./lib/clipEmbedding.ts";
 
 async function main() {
-  const buffer = fs.readFileSync("test.jpg");
-  const embedding = await getImageEmbedding(buffer);
+  const embedding = await getImageEmbedding("test.jpg");
 
   console.log("Embedding length:", embedding.length);
   console.log("First 5 values:", embedding.slice(0, 5));

@@ -1,0 +1,5 @@
+$env:HF_HOME="D:\hf-cache"
+$env:HF_DATASETS_CACHE="D:\hf-cache"
+$env:TRANSFORMERS_CACHE="D:\hf-cache"
+
+npx ts-node --esm test-clip.ts
